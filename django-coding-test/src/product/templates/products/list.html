@@ -1,8 +1,8 @@
 {% extends 'backend/base.html' %}
-
 {% block title %} Product List {% endblock %}
-
 {% block content %}
+
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Products</h1>
@@ -10,15 +10,23 @@
 
 
     <div class="card">
-        <form action="" method="get" class="card-header">
+        <form action="{% url 'product:filter.product' %}" method="get" class="card-header">
             <div class="form-row justify-content-between">
                 <div class="col-md-2">
                     <input type="text" name="title" placeholder="Product Title" class="form-control">
                 </div>
                 <div class="col-md-2">
-                    <select name="variant" id="" class="form-control">
+                    <select name="variant" id="variant" class="form-control" style="width: 100%; height: 110%;">
                         <option selected disabled>--Select A Variant--</option>
-
+                        {% for variant in variants %}
+                        <optgroup label="{{variant.title}}">
+                            {% for product_variant in distinct_variants %}
+                            {% if product_variant.variant.id == variant.id %}
+                            <option>{{ product_variant.variant_title }}</option>
+                            {% endif %}
+                            {% endfor %}
+                          </optgroup>
+                        {% endfor %}
                     </select>
                 </div>
 
@@ -53,60 +61,60 @@
                         <th width="150px">Action</th>
                     </tr>
                     </thead>
-
+                
                     <tbody>
+                    {% for product in products %}
                     <tr>
-                        <td>1</td>
-                        <td>T-Shirt <br> Created at : 25-Aug-2020</td>
-                        <td>Quality product in low cost</td>
+                        <td>{{product.id}}</td>
+                        <td>{{product.title}} <br>Created at : {{product.created_at|timesince}} ago</td>
+                        <td>{{product.description}}</td>
+
                         <td>
-                            <dl class="row mb-0" style="height: 80px; overflow: hidden" id="variant">
+                            <dl class="row mb-0 variant" style="height: 80px; overflow: hidden" id="variant_{{ product.id }}">
+                            {% if product_variation_price_qs %}
+
+                                {% for variation in product_variation_price_qs %}
+                                    {% if variation.product.id == product.id %}
+
+                                    <dt class="col-sm-3 pb-0">
+                                    {{ variation.product_variant_one.variant_title }} / {{ variation.product_variant_two.variant_title }} / {{ variation.product_variant_three.variant_title }}
+                                    </dt>
+                                    <dd class="col-sm-9">
+                                        <dl class="row mb-0">
+                                            <dd class="col-sm-4 pb-0">Price : {{ variation.price }}</dd>
+                                            <dd class="col-sm-8 pb-0">InStock : {{ variation.stock }}</dd>
+                                        </dl>
+                                    </dd>
+                                    {% endif %}
+                            
+                                {% endfor %}
+                            
+                            {% else %}
+
+                                {% for variation in product.product_item_variation_price.all %}
+                                   
                                 <dt class="col-sm-3 pb-0">
-                                    XL/ Black/ Full
+                                   {{ variation.product_variant_one.variant_title }} / {{ variation.product_variant_two.variant_title }} / {{ variation.product_variant_three.variant_title }}
                                 </dt>
                                 <dd class="col-sm-9">
                                     <dl class="row mb-0">
-                                        <dd class="col-sm-4 pb-0">Price : 200.0</dd>
-                                        <dd class="col-sm-8 pb-0">InStock : 50.</dd>
+                                        <dd class="col-sm-4 pb-0">Price : {{ variation.price }}</dd>
+                                        <dd class="col-sm-8 pb-0">InStock : {{ variation.stock }}</dd>
                                     </dl>
                                 </dd>
-                                <dt class="col-sm-3 pb-0">
-                                    XL/ Black/ Half
-                                </dt>
-                                <dd class="col-sm-9">
-                                    <dl class="row mb-0">
-                                        <dd class="col-sm-4 pb-0">Price : 200.0</dd>
-                                        <dd class="col-sm-8 pb-0">InStock : 50.</dd>
-                                    </dl>
-                                </dd>
-                                <dt class="col-sm-3 pb-0">
-                                    L/ Black/ Full
-                                </dt>
-                                <dd class="col-sm-9">
-                                    <dl class="row mb-0">
-                                        <dd class="col-sm-4 pb-0">Price : 200.0</dd>
-                                        <dd class="col-sm-8 pb-0">InStock : 50.</dd>
-                                    </dl>
-                                </dd>
-                                <dt class="col-sm-3 pb-0">
-                                    L/ Black/ Half
-                                </dt>
-                                <dd class="col-sm-9">
-                                    <dl class="row mb-0">
-                                        <dd class="col-sm-4 pb-0">Price : 200.0</dd>
-                                        <dd class="col-sm-8 pb-0">InStock : 50.</dd>
-                                    </dl>
-                                </dd>
+                            
+                                {% endfor %}
+                            {% endif %}
                             </dl>
-                            <button onclick="$('#variant').toggleClass('h-auto')" class="btn btn-sm btn-link">Show more
+                            <button onclick="toggleVariant('{{product.id}}')" class="btn btn-sm btn-link">Show more
                             </button>
                         </td>
+
                         <td>
-                            <div class="btn-group btn-group-sm">
-                                <a href="" class="btn btn-success">Edit</a>
-                            </div>
+                           <button class="btn btn-success">Edit</button>
                         </td>
                     </tr>
+                    {% endfor %}
                     </tbody>
 
                 </table>
@@ -114,15 +122,62 @@
 
         </div>
 
+    
+        
         <div class="card-footer">
             <div class="row justify-content-between">
+                {% if page == "product_list" %}
                 <div class="col-md-6">
-                    <p>Showing 1 to 10 out of 100</p>
+                    <p>Showing {{ start_item_number }} to {{ end_item_number }} out of {{ products.paginator.count }}</p>
                 </div>
                 <div class="col-md-2">
+                    <ul class="pagination justify-content-end">
+                        <!-- <li class="page-item disabled">
+                          <a class="page-link" href="#" aria-label="Previous">
+                            <span aria-hidden="true">
+                              <i></i>
+                              << 
 
+                            </span>
+                          </a>
+                        </li> -->
+                        {% if products.paginator.num_pages > 1 %}
+                            {% for page_num in products.paginator.page_range %}
+                                {% if page_num == products.number %}
+                                    <li class="page-item active"><a class="page-link" href="#">{{ page_num }}</a></li>
+                                {% else %}
+                                    <li class="page-item"><a class="page-link" href="?page={{ page_num }}">{{ page_num }}</a></li>
+                                {% endif %}
+                            {% endfor %}
+                        {% endif %}
+                        
+                        <!-- <li class="page-item">
+                          <a class="page-link" href="#" aria-label="Next">
+                            <span aria-hidden="true">
+                                >>
+                             <i></i>
+                            </span>
+                          </a>
+                        </li> -->
+                      </ul>
                 </div>
+                {% endif %}
             </div>
         </div>
-    </div>
+
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+
+<script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js" defer></script>
+
+<script>
+        $(document).ready(function() {
+        $('#variant').select2();
+    });
+
+    function toggleVariant(productId) {
+        const variantElement = document.getElementById('variant_' + productId);
+        variantElement.classList.toggle('h-auto');
+    }
+</script>
 {% endblock %}

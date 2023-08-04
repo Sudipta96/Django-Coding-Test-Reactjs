@@ -1,12 +1,27 @@
-import React, {useState} from 'react';
+import React, {useState, useEffect} from 'react';
 import TagsInput from 'react-tagsinput';
 import 'react-tagsinput/react-tagsinput.css';
-import Dropzone from 'react-dropzone'
+import Dropzone from 'react-dropzone';
+import axios from 'axios';
+import Cookies from 'js-cookie'; 
 
 
 const CreateProduct = (props) => {
 
-    const [productVariantPrices, setProductVariantPrices] = useState([])
+    const [productVariantPrices, setProductVariantPrices] = useState([]);
+    const [productName, setProductName] = useState('');
+    const [productSKU, setProductSKU] = useState('');
+    const [productDescription, setProductDescription] = useState('');
+    const [uploadedFiles, setUploadedFiles] = useState([]);
+    const [csrfToken, setCSRFToken] = useState('');
+
+    // Effect hook to fetch CSRF token from cookies on component mount
+    useEffect(() => {
+        const csrfTokenFromCookies = Cookies.get('csrftoken');
+        setCSRFToken(csrfTokenFromCookies);
+    }, []);
+
+    
 
     const [productVariants, setProductVariant] = useState([
         {
@@ -53,6 +68,7 @@ const CreateProduct = (props) => {
         setProductVariantPrices([])
 
         getCombn(tags).forEach(item => {
+
             setProductVariantPrices(productVariantPrice => [...productVariantPrice, {
                 title: item,
                 price: 0,
@@ -73,12 +89,119 @@ const CreateProduct = (props) => {
         }, []);
         return ans;
     }
+    
+    // update product variant price
+    const handlePriceChange = (index, value) => {
+        setProductVariantPrices((prevPrices) => {
+          const updatedPrices = [...prevPrices];
+          updatedPrices[index].price = value;
+          return updatedPrices;
+        });
+      };
+      
+    // update product variant stock value  
+      const handleStockChange = (index, value) => {
+        setProductVariantPrices((prevPrices) => {
+          const updatedPrices = [...prevPrices];
+          updatedPrices[index].stock = value;
+          return updatedPrices;
+        });
+      };
+      
+    
+  // Save product
+  const saveProduct = async (event) => {
+    event.preventDefault();
 
-    // Save product
-    let saveProduct = (event) => {
-        event.preventDefault();
-        // TODO : write your code here to save the product
+    // Check if required fields are filled up
+    if (!productName || !productSKU || !productDescription) {
+      alert('Please fill up all required fields (Product Name, Product SKU, Description)');
+      return;
     }
+
+    try {
+      // Create a Product model object
+      const productData = {
+        title: productName,
+        sku: productSKU,
+        description: productDescription
+      };
+
+    //   const csrfToken = 'DVp61MiBb2hlI1VhdNDaEtLJPXMW4iO4Qw8zFfDUZGSct2DESs55KW0Zweryi2NB';   // temporary solution
+      const headers = {
+            'X-CSRFToken': csrfToken,
+       };
+       console.log("csrf_token");
+       console.log(csrfToken);
+
+      const response = await axios.post('/product/api/create/', productData, { headers });
+
+      // Create ProductVariant and ProductVariantPrice model objects
+      const productId = response.data.id;
+
+      const variantItems = productVariants.map((variant, index) => {
+
+        // Check if variant tags exist and split them if there are multiple tags
+        if (variant.tags.length > 0) {
+            variant.tags.forEach((tag) => {
+        
+            const variantData = {
+                variant_title: tag,
+                variant: variant.option,
+                product: productId,
+            };
+
+            axios.post('/product/api/create/product-variants/', variantData, { headers });
+
+            });
+        }
+
+      // Create ProductVariantPrice model object
+      const variantPriceData = {
+        title: productVariantPrices[index].title,
+        price: productVariantPrices[index].price,
+        stock: productVariantPrices[index].stock,
+        product: productId,
+      };
+      console.log("Product Variation Price");
+      console.log(variantPriceData);
+      axios.post('/product/api/create/product-variant-prices/', variantPriceData, { headers });
+
+      });
+
+      setTimeout(() => {
+      }, 5000); // 10000 milliseconds = 10 seconds
+      console.log("5 sec after");
+      // Upload product images
+    const formData = new FormData();
+    uploadedFiles.forEach((file) => {
+      formData.append('file', file);
+    });
+
+
+    const uploadResponse = await axios.post(`/product/api/create/${productId}/upload_images/`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+        'X-CSRFToken': csrfToken,
+      },
+    });
+	
+	 if (uploadResponse.status === 200) {
+      alert('Product and Images saved successfully!');
+      // You can redirect to a new page or perform any other action after saving the product.
+    } else {
+      alert('Error while uploading images. Please try again.');
+    }
+
+
+
+      // You can redirect to a new page or perform any other action after saving the product.
+    } catch (error) {
+      alert('Error while saving the product. Please try again.');
+      console.error(error);
+    }
+  };
+    
 
 
     return (
@@ -90,15 +213,21 @@ const CreateProduct = (props) => {
                             <div className="card-body">
                                 <div className="form-group">
                                     <label htmlFor="">Product Name</label>
-                                    <input type="text" placeholder="Product Name" className="form-control"/>
+                                    <input type="text" placeholder="Product Name" 
+                                           className="form-control" value={productName}
+                                           onChange={(e) => setProductName(e.target.value)}/>
                                 </div>
                                 <div className="form-group">
                                     <label htmlFor="">Product SKU</label>
-                                    <input type="text" placeholder="Product Name" className="form-control"/>
+                                    <input type="text" placeholder="Product Name"
+                                           className="form-control" value={productSKU}
+                                           onChange={(e) => setProductSKU(e.target.value)}/>
                                 </div>
                                 <div className="form-group">
                                     <label htmlFor="">Description</label>
-                                    <textarea id="" cols="30" rows="4" className="form-control"></textarea>
+                                    <textarea id="" cols="30" rows="4" 
+                                              className="form-control" value={productDescription}
+                                              onChange={(e) => setProductDescription(e.target.value)}></textarea>
                                 </div>
                             </div>
                         </div>
@@ -109,12 +238,21 @@ const CreateProduct = (props) => {
                                 <h6 className="m-0 font-weight-bold text-primary">Media</h6>
                             </div>
                             <div className="card-body border">
-                                <Dropzone onDrop={acceptedFiles => console.log(acceptedFiles)}>
+                                <Dropzone onDrop={acceptedFiles => setUploadedFiles(acceptedFiles)}>
                                     {({getRootProps, getInputProps}) => (
                                         <section>
                                             <div {...getRootProps()}>
                                                 <input {...getInputProps()} />
+                                                {/* <p>Drag 'n' drop some files here, or click to select files</p> */}
+                                                {uploadedFiles.length > 0 ? (
+                                                <ul>
+                                                    {uploadedFiles.map(file => (
+                                                    <li key={file.name}>{file.name}</li>
+                                                    ))}
+                                                </ul>
+                                                ) : (
                                                 <p>Drag 'n' drop some files here, or click to select files</p>
+                                                )}
                                             </div>
                                         </section>
                                     )}
@@ -201,8 +339,8 @@ const CreateProduct = (props) => {
                                                 return (
                                                     <tr key={index}>
                                                         <td>{productVariantPrice.title}</td>
-                                                        <td><input className="form-control" type="text"/></td>
-                                                        <td><input className="form-control" type="text"/></td>
+                                                        <td><input className="form-control" type="text" value={productVariantPrice.price} onChange={(e) => handlePriceChange(index, e.target.value)}/></td>
+                                                        <td><input className="form-control" type="text" value={productVariantPrice.stock} onChange={(e) => handleStockChange(index, e.target.value)}/></td>
                                                     </tr>
                                                 )
                                             })
@@ -215,7 +353,7 @@ const CreateProduct = (props) => {
                     </div>
                 </div>
 
-                <button type="button" onClick={saveProduct} className="btn btn-lg btn-primary">Save</button>
+                <button type="submit" onClick={saveProduct} className="btn btn-lg btn-primary">Save</button>
                 <button type="button" className="btn btn-secondary btn-lg">Cancel</button>
             </section>
         </div>
